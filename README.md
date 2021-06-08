@@ -1,3 +1,8 @@
+# Important note
+
+This is a fork of the official DJS repo, it is used as dependency for Tofu Bot until a release is published again (no modifications to source here are being made), or when DJS13 comes out.  
+The fork was made because while new feats have been merged into master, no release was drafted since April. Which prevents new features like stage channel support.
+
 <div align="center">
   <br />
   <p>
