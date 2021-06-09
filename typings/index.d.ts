@@ -144,32 +144,10 @@ declare module 'discord.js' {
 
     public static create(
       target: MessageTarget,
-      content: string | null,
-      options?: undefined,
+      options: string | MessageOptions | WebhookMessageOptions,
       extra?: MessageOptions | WebhookMessageOptions,
     ): APIMessage;
-    public static create(
-      target: MessageTarget,
-      content: string | null,
-      options: MessageOptions | WebhookMessageOptions | MessageAdditions,
-      extra?: MessageOptions | WebhookMessageOptions,
-    ): APIMessage;
-    public static partitionMessageAdditions(
-      items: readonly (MessageEmbed | MessageAttachment)[],
-    ): [MessageEmbed[], MessageAttachment[]];
     public static resolveFile(fileLike: BufferResolvable | Stream | FileOptions | MessageAttachment): Promise<unknown>;
-    public static transformOptions(
-      content: string | null,
-      options?: undefined,
-      extra?: MessageOptions | WebhookMessageOptions,
-      isWebhook?: boolean,
-    ): MessageOptions | WebhookMessageOptions;
-    public static transformOptions(
-      content: string | null,
-      options: MessageOptions | WebhookMessageOptions | MessageAdditions,
-      extra?: MessageOptions | WebhookMessageOptions,
-      isWebhook?: boolean,
-    ): MessageOptions | WebhookMessageOptions;
 
     public makeContent(): string | string[] | undefined;
     public resolveData(): this;
@@ -314,6 +292,10 @@ declare module 'discord.js' {
     public [Symbol.iterator](): IterableIterator<S>;
     public static FLAGS: unknown;
     public static resolve(bit?: BitFieldResolvable<any, number | bigint>): number | bigint;
+  }
+
+  export class ButtonInteraction extends MessageComponentInteraction {
+    public componentType: 'BUTTON';
   }
 
   export class CategoryChannel extends GuildChannel {
@@ -471,17 +453,10 @@ declare module 'discord.js' {
     public webhook: InteractionWebhook;
     public defer(options?: InteractionDeferOptions): Promise<void>;
     public deleteReply(): Promise<void>;
-    public editReply(
-      content: string | null | APIMessage | WebhookEditMessageOptions | MessageAdditions,
-    ): Promise<Message | RawMessage>;
-    public editReply(content: string | null, options?: WebhookEditMessageOptions): Promise<Message | RawMessage>;
+    public editReply(options: string | APIMessage | WebhookEditMessageOptions): Promise<Message | RawMessage>;
     public fetchReply(): Promise<Message | RawMessage>;
-    public followUp(
-      content: string | APIMessage | InteractionReplyOptions | MessageAdditions,
-    ): Promise<Message | RawMessage>;
-    public followUp(content: string | null, options?: InteractionReplyOptions): Promise<Message | RawMessage>;
-    public reply(content: string | null | APIMessage | InteractionReplyOptions | MessageAdditions): Promise<void>;
-    public reply(content: string | null, options?: InteractionReplyOptions): Promise<void>;
+    public followUp(options: string | APIMessage | InteractionReplyOptions): Promise<Message | RawMessage>;
+    public reply(options: string | APIMessage | InteractionReplyOptions): Promise<void>;
     private transformOption(option: unknown, resolved: unknown): CommandInteractionOption;
     private _createOptionsCollection(options: unknown, resolved: unknown): Collection<string, CommandInteractionOption>;
   }
@@ -553,7 +528,6 @@ declare module 'discord.js' {
       RATE_LIMIT: 'rateLimit';
       INVALID_REQUEST_WARNING: 'invalidRequestWarning';
       CLIENT_READY: 'ready';
-      RESUMED: 'resumed';
       APPLICATION_COMMAND_CREATE: 'applicationCommandCreate';
       APPLICATION_COMMAND_DELETE: 'applicationCommandDelete';
       APPLICATION_COMMAND_UPDATE: 'applicationCommandUpdate';
@@ -589,15 +563,16 @@ declare module 'discord.js' {
       MESSAGE_REACTION_ADD: 'messageReactionAdd';
       MESSAGE_REACTION_REMOVE: 'messageReactionRemove';
       MESSAGE_REACTION_REMOVE_ALL: 'messageReactionRemoveAll';
+      MESSAGE_REACTION_REMOVE_EMOJI: 'messageReactionRemoveEmoji';
       USER_UPDATE: 'userUpdate';
       PRESENCE_UPDATE: 'presenceUpdate';
+      VOICE_SERVER_UPDATE: 'voiceServerUpdate';
       VOICE_STATE_UPDATE: 'voiceStateUpdate';
       VOICE_BROADCAST_SUBSCRIBE: 'subscribe';
       VOICE_BROADCAST_UNSUBSCRIBE: 'unsubscribe';
       TYPING_START: 'typingStart';
       WEBHOOKS_UPDATE: 'webhookUpdate';
       INTERACTION_CREATE: 'interaction';
-      RECONNECTING: 'reconnecting';
       ERROR: 'error';
       WARN: 'warn';
       DEBUG: 'debug';
@@ -1081,6 +1056,13 @@ declare module 'discord.js' {
     public requestData: HTTPErrorData;
   }
 
+  // tslint:disable-next-line:no-empty-interface - Merge RateLimitData into RateLimitError to not have to type it again
+  interface RateLimitError extends RateLimitData {}
+  export class RateLimitError extends Error {
+    constructor(data: RateLimitData);
+    public name: 'RateLimitError';
+  }
+
   export class Integration extends Base {
     constructor(client: Client, data: unknown, guild: Guild);
     public account: IntegrationAccount;
@@ -1136,6 +1118,7 @@ declare module 'discord.js' {
     public type: InteractionType;
     public user: User;
     public version: number;
+    public isButton(): this is ButtonInteraction;
     public isCommand(): this is CommandInteraction;
     public isMessageComponent(): this is MessageComponentInteraction;
   }
@@ -1144,24 +1127,11 @@ declare module 'discord.js' {
     constructor(client: Client, id: Snowflake, token: string);
     public token: string;
     public send(
-      content: string | (InteractionReplyOptions & { split?: false }) | MessageAdditions,
-    ): Promise<Message | RawMessage>;
-    public send(options: InteractionReplyOptions & { split: true | SplitOptions }): Promise<(Message | RawMessage)[]>;
-    public send(
-      options: InteractionReplyOptions | APIMessage,
-    ): Promise<Message | RawMessage | (Message | RawMessage)[]>;
-    public send(
-      content: string | null,
-      options: (InteractionReplyOptions & { split?: false }) | MessageAdditions,
+      options: string | APIMessage | (InteractionReplyOptions & { split?: false }),
     ): Promise<Message | RawMessage>;
     public send(
-      content: string | null,
-      options: InteractionReplyOptions & { split: true | SplitOptions },
+      options: APIMessage | (InteractionReplyOptions & { split: true | SplitOptions }),
     ): Promise<(Message | RawMessage)[]>;
-    public send(
-      content: string | null,
-      options: InteractionReplyOptions,
-    ): Promise<Message | RawMessage | (Message | RawMessage)[]>;
   }
 
   export class Invite extends Base {
@@ -1231,10 +1201,10 @@ declare module 'discord.js' {
     public webhookID: Snowflake | null;
     public flags: Readonly<MessageFlags>;
     public reference: MessageReference | null;
-    public awaitMessageComponentInteractions(
+    public awaitMessageComponentInteraction(
       filter: CollectorFilter<[MessageComponentInteraction]>,
-      options?: AwaitMessageComponentInteractionsOptions,
-    ): Promise<Collection<Snowflake, MessageComponentInteraction>>;
+      time?: number,
+    ): Promise<MessageComponentInteraction>;
     public awaitReactions(
       filter: CollectorFilter<[MessageReaction, User]>,
       options?: AwaitReactionsOptions,
@@ -1245,16 +1215,10 @@ declare module 'discord.js' {
     ): ReactionCollector;
     public createMessageComponentInteractionCollector(
       filter: CollectorFilter<[MessageComponentInteraction]>,
-      options?: AwaitMessageComponentInteractionsOptions,
+      options?: MessageComponentInteractionCollectorOptions,
     ): MessageComponentInteractionCollector;
     public delete(): Promise<Message>;
-    public edit(
-      content: string | null | MessageEditOptions | MessageEmbed | APIMessage | MessageAttachment | MessageAttachment[],
-    ): Promise<Message>;
-    public edit(
-      content: string | null,
-      options: MessageEditOptions | MessageEmbed | MessageAttachment | MessageAttachment[],
-    ): Promise<Message>;
+    public edit(content: string | MessageEditOptions | APIMessage): Promise<Message>;
     public equals(message: Message, rawData: unknown): boolean;
     public fetchReference(): Promise<Message>;
     public fetchWebhook(): Promise<Webhook>;
@@ -1263,20 +1227,8 @@ declare module 'discord.js' {
     public pin(): Promise<Message>;
     public react(emoji: EmojiIdentifierResolvable): Promise<MessageReaction>;
     public removeAttachments(): Promise<Message>;
-    public reply(
-      content: string | null | (ReplyMessageOptions & { split?: false }) | MessageAdditions,
-    ): Promise<Message>;
-    public reply(options: ReplyMessageOptions & { split: true | SplitOptions }): Promise<Message[]>;
-    public reply(options: ReplyMessageOptions | APIMessage): Promise<Message | Message[]>;
-    public reply(
-      content: string | null,
-      options: (ReplyMessageOptions & { split?: false }) | MessageAdditions,
-    ): Promise<Message>;
-    public reply(
-      content: string | null,
-      options: ReplyMessageOptions & { split: true | SplitOptions },
-    ): Promise<Message[]>;
-    public reply(content: string | null, options: ReplyMessageOptions): Promise<Message | Message[]>;
+    public reply(options: string | APIMessage | (ReplyMessageOptions & { split?: false })): Promise<Message>;
+    public reply(options: APIMessage | (ReplyMessageOptions & { split: true | SplitOptions })): Promise<Message[]>;
     public suppressEmbeds(suppress?: boolean): Promise<Message>;
     public toJSON(): unknown;
     public toString(): string;
@@ -1320,7 +1272,7 @@ declare module 'discord.js' {
     constructor(data?: MessageButton | MessageButtonOptions);
     public customID: string | null;
     public disabled: boolean;
-    public emoji: string | RawEmoji | null;
+    public emoji: RawEmoji | null;
     public label: string | null;
     public style: MessageButtonStyle | null;
     public type: 'BUTTON';
@@ -1363,21 +1315,11 @@ declare module 'discord.js' {
     public defer(options?: InteractionDeferOptions): Promise<void>;
     public deferUpdate(): Promise<void>;
     public deleteReply(): Promise<void>;
-    public editReply(
-      content: string | APIMessage | WebhookEditMessageOptions | MessageEmbed | MessageEmbed[],
-    ): Promise<Message | RawMessage>;
-    public editReply(content: string, options?: WebhookEditMessageOptions): Promise<Message | RawMessage>;
+    public editReply(options: string | APIMessage | WebhookEditMessageOptions): Promise<Message | RawMessage>;
     public fetchReply(): Promise<Message | RawMessage>;
-    public followUp(
-      content: string | APIMessage | InteractionReplyOptions | MessageAdditions,
-    ): Promise<Message | RawMessage>;
-    public followUp(content: string, options?: InteractionReplyOptions): Promise<Message | RawMessage>;
-    public reply(content: string | APIMessage | InteractionReplyOptions | MessageAdditions): Promise<void>;
-    public reply(content: string, options?: InteractionReplyOptions): Promise<void>;
-    public update(
-      content: string | APIMessage | WebhookEditMessageOptions | MessageEmbed | MessageEmbed[],
-    ): Promise<Message | RawMessage>;
-    public update(content: string, options?: WebhookEditMessageOptions): Promise<Message | RawMessage>;
+    public followUp(options: string | APIMessage | InteractionReplyOptions): Promise<Message | RawMessage>;
+    public reply(options: string | APIMessage | InteractionReplyOptions): Promise<void>;
+    public update(content: string | APIMessage | WebhookEditMessageOptions): Promise<Message | RawMessage>;
     public static resolveType(type: MessageComponentTypeResolvable): MessageComponentType;
   }
 
@@ -1951,6 +1893,7 @@ declare module 'discord.js' {
     public static moveElementInArray(array: any[], element: any, newIndex: number, offset?: boolean): number;
     public static parseEmoji(text: string): { animated: boolean; name: string; id: Snowflake | null } | null;
     public static resolveColor(color: ColorResolvable): number;
+    public static resolvePartialEmoji(emoji: EmojiIdentifierResolvable): Partial<RawEmoji> | null;
     public static verifyString(data: string, error?: typeof Error, errorMessage?: string, allowEmpty?: boolean): string;
     public static setPosition<T extends Channel | Role>(
       item: T,
@@ -2136,23 +2079,13 @@ declare module 'discord.js' {
     public token: string;
     public editMessage(
       message: MessageResolvable,
-      content: string | null | APIMessage | MessageEmbed | MessageEmbed[],
-      options?: WebhookEditMessageOptions,
+      options: string | APIMessage | WebhookEditMessageOptions,
     ): Promise<RawMessage>;
-    public editMessage(message: MessageResolvable, options: WebhookEditMessageOptions): Promise<RawMessage>;
     public fetchMessage(message: Snowflake, cache?: boolean): Promise<RawMessage>;
-    public send(content: string | (WebhookMessageOptions & { split?: false }) | MessageAdditions): Promise<RawMessage>;
-    public send(options: WebhookMessageOptions & { split: true | SplitOptions }): Promise<RawMessage[]>;
-    public send(options: WebhookMessageOptions | APIMessage): Promise<RawMessage | RawMessage[]>;
+    public send(options: string | APIMessage | (WebhookMessageOptions & { split?: false })): Promise<RawMessage>;
     public send(
-      content: string | null,
-      options: (WebhookMessageOptions & { split?: false }) | MessageAdditions,
-    ): Promise<RawMessage>;
-    public send(
-      content: string | null,
-      options: WebhookMessageOptions & { split: true | SplitOptions },
+      options: APIMessage | (WebhookMessageOptions & { split: true | SplitOptions }),
     ): Promise<RawMessage[]>;
-    public send(content: string | null, options: WebhookMessageOptions): Promise<RawMessage | RawMessage[]>;
   }
 
   export class WebSocketManager extends EventEmitter {
@@ -2329,6 +2262,8 @@ declare module 'discord.js' {
       name: string,
       options: GuildCreateChannelOptions,
     ): Promise<TextChannel | VoiceChannel | CategoryChannel | NewsChannel | StoreChannel | StageChannel>;
+    public fetch(id: Snowflake, cache?: boolean, force?: boolean): Promise<TextChannel | VoiceChannel | CategoryChannel | NewsChannel | StoreChannel | StageChannel | null>;
+    public fetch(id?: Snowflake, cache?: boolean, force?: boolean): Promise<Collection<Snowflake, TextChannel | VoiceChannel | CategoryChannel | NewsChannel | StoreChannel | StageChannel>>;
   }
 
   export class GuildEmojiManager extends BaseGuildEmojiManager {
@@ -2489,12 +2424,8 @@ declare module 'discord.js' {
   interface PartialTextBasedChannelFields {
     lastMessageID: Snowflake | null;
     readonly lastMessage: Message | null;
-    send(content: string | (MessageOptions & { split?: false }) | MessageAdditions): Promise<Message>;
-    send(options: MessageOptions & { split: true | SplitOptions }): Promise<Message[]>;
-    send(options: MessageOptions | APIMessage): Promise<Message | Message[]>;
-    send(content: string | null, options: (MessageOptions & { split?: false }) | MessageAdditions): Promise<Message>;
-    send(content: string | null, options: MessageOptions & { split: true | SplitOptions }): Promise<Message[]>;
-    send(content: string | null, options: MessageOptions): Promise<Message | Message[]>;
+    send(options: string | APIMessage | (MessageOptions & { split?: false })): Promise<Message>;
+    send(options: APIMessage | (MessageOptions & { split: true | SplitOptions })): Promise<Message[]>;
   }
 
   interface TextBasedChannelFields extends PartialTextBasedChannelFields {
@@ -2503,10 +2434,10 @@ declare module 'discord.js' {
     readonly lastPinAt: Date | null;
     typing: boolean;
     typingCount: number;
-    awaitMessageComponentInteractions(
+    awaitMessageComponentInteraction(
       filter: CollectorFilter<[MessageComponentInteraction]>,
-      options?: AwaitMessageComponentInteractionsOptions,
-    ): Promise<Collection<Snowflake, MessageComponentInteraction>>;
+      time?: number,
+    ): Promise<MessageComponentInteraction>;
     awaitMessages(
       filter: CollectorFilter<[Message]>,
       options?: AwaitMessagesOptions,
@@ -2535,31 +2466,13 @@ declare module 'discord.js' {
     deleteMessage(message: MessageResolvable | '@original'): Promise<void>;
     editMessage(
       message: MessageResolvable | '@original',
-      content: string | null | APIMessage | MessageAdditions,
-      options?: WebhookEditMessageOptions,
-    ): Promise<Message | RawMessage>;
-    editMessage(
-      message: MessageResolvable | '@original',
-      options: WebhookEditMessageOptions,
+      options: string | APIMessage | WebhookEditMessageOptions,
     ): Promise<Message | RawMessage>;
     fetchMessage(message: Snowflake | '@original', cache?: boolean): Promise<Message | RawMessage>;
     send(
-      content: string | (WebhookMessageOptions & { split?: false }) | MessageAdditions,
-    ): Promise<Message | RawMessage>;
-    send(options: WebhookMessageOptions & { split: true | SplitOptions }): Promise<(Message | RawMessage)[]>;
-    send(options: WebhookMessageOptions | APIMessage): Promise<Message | RawMessage | (Message | RawMessage)[]>;
-    send(
-      content: string | null,
-      options: (WebhookMessageOptions & { split?: false }) | MessageAdditions,
-    ): Promise<Message | RawMessage>;
-    send(
-      content: string | null,
-      options: WebhookMessageOptions & { split: true | SplitOptions },
+      options: APIMessage | (WebhookMessageOptions & { split: true | SplitOptions }),
     ): Promise<(Message | RawMessage)[]>;
-    send(
-      content: string | null,
-      options: WebhookMessageOptions,
-    ): Promise<Message | RawMessage | (Message | RawMessage)[]>;
+    send(options: string | APIMessage | (WebhookMessageOptions & { split?: false })): Promise<Message | RawMessage>;
   }
 
   interface WebhookFields extends PartialWebhookFields {
@@ -2729,10 +2642,6 @@ declare module 'discord.js' {
     new?: any;
   }
 
-  interface AwaitMessageComponentInteractionsOptions extends MessageComponentInteractionCollectorOptions {
-    errors?: string[];
-  }
-
   interface AwaitMessagesOptions extends MessageCollectorOptions {
     errors?: string[];
   }
@@ -2879,6 +2788,7 @@ declare module 'discord.js' {
     intents: BitFieldResolvable<IntentsString, number>;
     ws?: WebSocketOptions;
     http?: HTTPOptions;
+    rejectOnRateLimit?: string[] | ((data: RateLimitData) => boolean | Promise<boolean>);
   }
 
   type ClientPresenceStatus = 'online' | 'idle' | 'dnd';
@@ -3387,8 +3297,6 @@ declare module 'discord.js' {
 
   type MembershipStates = 'INVITED' | 'ACCEPTED';
 
-  type MessageAdditions = MessageEmbed | MessageAttachment | (MessageEmbed | MessageAttachment)[];
-
   type MessageActionRowComponent = MessageButton;
 
   type MessageActionRowComponentOptions = MessageButtonOptions;
@@ -3407,7 +3315,7 @@ declare module 'discord.js' {
   interface MessageButtonOptions extends BaseMessageComponentOptions {
     customID?: string;
     disabled?: boolean;
-    emoji?: RawEmoji;
+    emoji?: EmojiIdentifierResolvable;
     label?: string;
     style: MessageButtonStyleResolvable;
     url?: string;
@@ -3444,7 +3352,7 @@ declare module 'discord.js' {
     files?: (FileOptions | BufferResolvable | Stream | MessageAttachment)[];
     flags?: BitFieldResolvable<MessageFlagsString, number>;
     allowedMentions?: MessageMentionOptions;
-    components?: MessageActionRow[] | MessageActionRowOptions[];
+    components?: MessageActionRow[] | MessageActionRowOptions[] | MessageActionRowComponentResolvable[][];
   }
 
   interface MessageEmbedAuthor {
@@ -3537,7 +3445,7 @@ declare module 'discord.js' {
     nonce?: string | number;
     content?: string;
     embed?: MessageEmbed | MessageEmbedOptions;
-    components?: MessageActionRow[] | MessageActionRowOptions[];
+    components?: MessageActionRow[] | MessageActionRowOptions[] | MessageActionRowComponentResolvable[][];
     allowedMentions?: MessageMentionOptions;
     files?: (FileOptions | BufferResolvable | Stream | MessageAttachment)[];
     code?: string | boolean;
