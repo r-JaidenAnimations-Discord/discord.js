@@ -15,6 +15,7 @@ const GuildTemplate = require('../structures/GuildTemplate');
 const Invite = require('../structures/Invite');
 const VoiceRegion = require('../structures/VoiceRegion');
 const Webhook = require('../structures/Webhook');
+const Widget = require('../structures/Widget');
 const Collection = require('../util/Collection');
 const { Events, DefaultOptions, InviteScopes } = require('../util/Constants');
 const DataResolver = require('../util/DataResolver');
@@ -247,7 +248,7 @@ class Client extends BaseClient {
    * @param {InviteResolvable} invite Invite code or URL
    * @returns {Promise<Invite>}
    * @example
-   * client.fetchInvite('https://discord.gg/bRCvFy9')
+   * client.fetchInvite('https://discord.gg/djs')
    *   .then(invite => console.log(`Obtained invite with code: ${invite.code}`))
    *   .catch(console.error);
    */
@@ -290,7 +291,7 @@ class Client extends BaseClient {
     return this.api
       .webhooks(id, token)
       .get()
-      .then(data => new Webhook(this, data));
+      .then(data => new Webhook(this, { token, ...data }));
   }
 
   /**
@@ -363,6 +364,18 @@ class Client extends BaseClient {
       .guilds(id)
       .preview.get()
       .then(data => new GuildPreview(this, data));
+  }
+
+  /**
+   * Obtains the widget of a guild from Discord, available for guilds with the widget enabled.
+   * @param {GuildResolvable} guild The guild to fetch the widget for
+   * @returns {Promise<Widget>}
+   */
+  async fetchWidget(guild) {
+    const id = this.guilds.resolveID(guild);
+    if (!id) throw new TypeError('INVALID_TYPE', 'guild', 'GuildResolvable');
+    const data = await this.api.guilds(id, 'widget.json').get();
+    return new Widget(this, data);
   }
 
   /**

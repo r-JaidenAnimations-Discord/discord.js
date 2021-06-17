@@ -60,21 +60,26 @@ class GuildChannelManager extends BaseManager {
    */
 
   /**
+   * Options used to create a new channel in a guild.
+   * @typedef {Object} GuildChannelCreateOptions
+   * @property {string} [type='text'] The type of the new channel, either `text`, `voice`, `category`, `news`,
+   * `store`, or `stage`
+   * @property {string} [topic] The topic for the new channel
+   * @property {boolean} [nsfw] Whether the new channel is nsfw
+   * @property {number} [bitrate] Bitrate of the new channel in bits (only voice)
+   * @property {number} [userLimit] Maximum amount of users allowed in the new channel (only voice)
+   * @property {ChannelResolvable} [parent] Parent of the new channel
+   * @property {OverwriteResolvable[]|Collection<Snowflake, OverwriteResolvable>} [permissionOverwrites]
+   * Permission overwrites of the new channel
+   * @property {number} [position] Position of the new channel
+   * @property {number} [rateLimitPerUser] The ratelimit per user for the new channel
+   * @property {string} [reason] Reason for creating the new channel
+   */
+
+  /**
    * Creates a new channel in the guild.
    * @param {string} name The name of the new channel
-   * @param {Object} [options] Options
-   * @param {string} [options.type='text'] The type of the new channel, either `text`, `voice`, `category`, `news`,
-   * `store`, or `stage`
-   * @param {string} [options.topic] The topic for the new channel
-   * @param {boolean} [options.nsfw] Whether the new channel is nsfw
-   * @param {number} [options.bitrate] Bitrate of the new channel in bits (only voice)
-   * @param {number} [options.userLimit] Maximum amount of users allowed in the new channel (only voice)
-   * @param {ChannelResolvable} [options.parent] Parent of the new channel
-   * @param {OverwriteResolvable[]|Collection<Snowflake, OverwriteResolvable>} [options.permissionOverwrites]
-   * Permission overwrites of the new channel
-   * @param {number} [options.position] Position of the new channel
-   * @param {number} [options.rateLimitPerUser] The ratelimit per user for the channel
-   * @param {string} [options.reason] Reason for creating the channel
+   * @param {GuildChannelCreateOptions} [options={}] Options for creating the new channel
    * @returns {Promise<GuildChannel>}
    * @example
    * // Create a new text channel
@@ -122,8 +127,7 @@ class GuildChannelManager extends BaseManager {
   /**
    * Obtains one or more guild channels from Discord, or the channel cache if they're already available.
    * @param {Snowflake} [id] ID of the channel
-   * @param {boolean} [cache=true] Whether to cache the new channel objects if it weren't already
-   * @param {boolean} [force=false] Whether to skip the cache check and request the API
+   * @param {BaseFetchOptions} [options] Additional options for this fetch
    * @returns {Promise<?GuildChannel|Collection<Snowflake, GuildChannel>>}
    * @example
    * // Fetch all channels from the guild
@@ -136,7 +140,7 @@ class GuildChannelManager extends BaseManager {
    *   .then(channel => console.log(`The channel name is: ${channel.name}`))
    *   .catch(console.error);
    */
-  async fetch(id, cache = true, force = false) {
+  async fetch(id, { cache = true, force = false } = {}) {
     if (id && !force) {
       const existing = this.cache.get(id);
       if (existing) return existing;

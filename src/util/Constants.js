@@ -136,11 +136,16 @@ function makeImageUrl(root, { format = 'webp', size } = {}) {
 
 /**
  * Options for Image URLs.
- * @typedef {Object} ImageURLOptions
- * @property {string} [format] One of `webp`, `png`, `jpg`, `jpeg`, `gif`. If no format is provided,
- * defaults to `webp`.
+ * @typedef {StaticImageURLOptions} ImageURLOptions
  * @property {boolean} [dynamic] If true, the format will dynamically change to `gif` for
- * animated avatars; the default is false.
+ * animated avatars; the default is false
+ */
+
+/**
+ * Options for static Image URLs.
+ * @typedef {Object} StaticImageURLOptions
+ * @property {string} [format] One of `webp`, `png`, `jpg`, `jpeg`, `gif`. If no format is provided,
+ * defaults to `webp`
  * @property {number} [size] One of `16`, `32`, `64`, `128`, `256`, `512`, `1024`, `2048`, `4096`
  */
 
@@ -203,23 +208,6 @@ exports.Status = {
   RESUMING: 8,
 };
 
-/**
- * The current status of a voice connection. Here are the available statuses:
- * * CONNECTED: 0
- * * CONNECTING: 1
- * * AUTHENTICATING: 2
- * * RECONNECTING: 3
- * * DISCONNECTED: 4
- * @typedef {number} VoiceStatus
- */
-exports.VoiceStatus = {
-  CONNECTED: 0,
-  CONNECTING: 1,
-  AUTHENTICATING: 2,
-  RECONNECTING: 3,
-  DISCONNECTED: 4,
-};
-
 exports.OPCodes = {
   DISPATCH: 0,
   HEARTBEAT: 1,
@@ -233,18 +221,6 @@ exports.OPCodes = {
   INVALID_SESSION: 9,
   HELLO: 10,
   HEARTBEAT_ACK: 11,
-};
-
-exports.VoiceOPCodes = {
-  IDENTIFY: 0,
-  SELECT_PROTOCOL: 1,
-  READY: 2,
-  HEARTBEAT: 3,
-  SESSION_DESCRIPTION: 4,
-  SPEAKING: 5,
-  HELLO: 8,
-  CLIENT_CONNECT: 12,
-  CLIENT_DISCONNECT: 13,
 };
 
 exports.Events = {
@@ -262,7 +238,6 @@ exports.Events = {
   GUILD_MEMBER_REMOVE: 'guildMemberRemove',
   GUILD_MEMBER_UPDATE: 'guildMemberUpdate',
   GUILD_MEMBER_AVAILABLE: 'guildMemberAvailable',
-  GUILD_MEMBER_SPEAKING: 'guildMemberSpeaking',
   GUILD_MEMBERS_CHUNK: 'guildMembersChunk',
   GUILD_INTEGRATIONS_UPDATE: 'guildIntegrationsUpdate',
   GUILD_ROLE_CREATE: 'roleCreate',
@@ -291,8 +266,6 @@ exports.Events = {
   PRESENCE_UPDATE: 'presenceUpdate',
   VOICE_SERVER_UPDATE: 'voiceServerUpdate',
   VOICE_STATE_UPDATE: 'voiceStateUpdate',
-  VOICE_BROADCAST_SUBSCRIBE: 'subscribe',
-  VOICE_BROADCAST_UNSUBSCRIBE: 'unsubscribe',
   TYPING_START: 'typingStart',
   WEBHOOKS_UPDATE: 'webhookUpdate',
   INTERACTION_CREATE: 'interaction',
@@ -306,6 +279,9 @@ exports.Events = {
   SHARD_RESUME: 'shardResume',
   INVALIDATED: 'invalidated',
   RAW: 'raw',
+  STAGE_INSTANCE_CREATE: 'stageInstanceCreate',
+  STAGE_INSTANCE_UPDATE: 'stageInstanceUpdate',
+  STAGE_INSTANCE_DELETE: 'stageInstanceDelete',
 };
 
 exports.ShardEvents = {
@@ -372,6 +348,9 @@ exports.PartialTypes = keyMirror(['USER', 'CHANNEL', 'GUILD_MEMBER', 'MESSAGE', 
  * * VOICE_SERVER_UPDATE
  * * WEBHOOKS_UPDATE
  * * INTERACTION_CREATE
+ * * STAGE_INSTANCE_CREATE
+ * * STAGE_INSTANCE_UPDATE
+ * * STAGE_INSTANCE_DELETE
  * @typedef {string} WSEventType
  */
 exports.WSEvents = keyMirror([
@@ -415,6 +394,9 @@ exports.WSEvents = keyMirror([
   'VOICE_SERVER_UPDATE',
   'WEBHOOKS_UPDATE',
   'INTERACTION_CREATE',
+  'STAGE_INSTANCE_CREATE',
+  'STAGE_INSTANCE_UPDATE',
+  'STAGE_INSTANCE_DELETE',
 ]);
 
 /**
@@ -506,17 +488,17 @@ exports.SystemMessageTypes = exports.MessageTypes.filter(
 );
 
 /**
- * <info>Bots cannot set a `CUSTOM_STATUS`, it is only for custom statuses received from users</info>
+ * <info>Bots cannot set a `CUSTOM` activity type, it is only for custom statuses received from users</info>
  * The type of an activity of a users presence, e.g. `PLAYING`. Here are the available types:
  * * PLAYING
  * * STREAMING
  * * LISTENING
  * * WATCHING
- * * CUSTOM_STATUS
+ * * CUSTOM
  * * COMPETING
  * @typedef {string} ActivityType
  */
-exports.ActivityTypes = ['PLAYING', 'STREAMING', 'LISTENING', 'WATCHING', 'CUSTOM_STATUS', 'COMPETING'];
+exports.ActivityTypes = createEnum(['PLAYING', 'STREAMING', 'LISTENING', 'WATCHING', 'CUSTOM', 'COMPETING']);
 
 exports.ChannelTypes = createEnum([
   'TEXT',
@@ -577,7 +559,7 @@ exports.Colors = {
  * * ALL_MEMBERS
  * @typedef {string} ExplicitContentFilterLevel
  */
-exports.ExplicitContentFilterLevels = ['DISABLED', 'MEMBERS_WITHOUT_ROLES', 'ALL_MEMBERS'];
+exports.ExplicitContentFilterLevels = createEnum(['DISABLED', 'MEMBERS_WITHOUT_ROLES', 'ALL_MEMBERS']);
 
 /**
  * The value set for the verification levels for a guild:
@@ -588,7 +570,7 @@ exports.ExplicitContentFilterLevels = ['DISABLED', 'MEMBERS_WITHOUT_ROLES', 'ALL
  * * VERY_HIGH
  * @typedef {string} VerificationLevel
  */
-exports.VerificationLevels = ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'VERY_HIGH'];
+exports.VerificationLevels = createEnum(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'VERY_HIGH']);
 
 /**
  * An error encountered while performing an API request. Here are the potential errors:
@@ -622,6 +604,8 @@ exports.VerificationLevels = ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'VERY_HIGH'];
  * * MAXIMUM_CHANNELS
  * * MAXIMUM_ATTACHMENTS
  * * MAXIMUM_INVITES
+ * * MAXIMUM_ANIMATED_EMOJIS
+ * * MAXIMUM_SERVER_MEMBERS
  * * GUILD_ALREADY_HAS_TEMPLATE
  * * UNAUTHORIZED
  * * ACCOUNT_VERIFICATION_REQUIRED
@@ -691,6 +675,8 @@ exports.APIErrors = {
   MAXIMUM_CHANNELS: 30013,
   MAXIMUM_ATTACHMENTS: 30015,
   MAXIMUM_INVITES: 30016,
+  MAXIMUM_ANIMATED_EMOJIS: 30018,
+  MAXIMUM_SERVER_MEMBERS: 30019,
   GUILD_ALREADY_HAS_TEMPLATE: 30031,
   UNAUTHORIZED: 40001,
   ACCOUNT_VERIFICATION_REQUIRED: 40002,
@@ -731,45 +717,35 @@ exports.APIErrors = {
 };
 
 /**
- * The value set for a guild's default message notifications, e.g. `ALL`. Here are the available types:
- * * ALL
- * * MENTIONS
- * @typedef {string} DefaultMessageNotifications
+ * The value set for a guild's default message notifications, e.g. `ALL_MESSAGES`. Here are the available types:
+ * * ALL_MESSAGES
+ * * ONLY_MENTIONS
+ * @typedef {string} DefaultMessageNotificationLevel
  */
-exports.DefaultMessageNotifications = ['ALL', 'MENTIONS'];
+exports.DefaultMessageNotificationLevels = createEnum(['ALL_MESSAGES', 'ONLY_MENTIONS']);
 
 /**
  * The value set for a team members's membership state:
  * * INVITED
  * * ACCEPTED
- * @typedef {string} MembershipStates
+ * @typedef {string} MembershipState
  */
-exports.MembershipStates = [
-  // They start at 1
-  null,
-  'INVITED',
-  'ACCEPTED',
-];
+exports.MembershipStates = createEnum([null, 'INVITED', 'ACCEPTED']);
 
 /**
  * The value set for a webhook's type:
  * * Incoming
  * * Channel Follower
- * @typedef {string} WebhookTypes
+ * @typedef {string} WebhookType
  */
-exports.WebhookTypes = [
-  // They start at 1
-  null,
-  'Incoming',
-  'Channel Follower',
-];
+exports.WebhookTypes = createEnum([null, 'Incoming', 'Channel Follower']);
 
 /**
  * The value set for a sticker's type:
  * * PNG
  * * APNG
  * * LOTTIE
- * @typedef {string} StickerFormatTypes
+ * @typedef {string} StickerFormatType
  */
 exports.StickerFormatTypes = createEnum([null, 'PNG', 'APNG', 'LOTTIE']);
 
@@ -864,7 +840,15 @@ exports.MessageComponentTypes = createEnum([null, 'ACTION_ROW', 'BUTTON']);
 exports.MessageButtonStyles = createEnum([null, 'PRIMARY', 'SECONDARY', 'SUCCESS', 'DANGER', 'LINK']);
 
 /**
- * NSFW level of a Guild
+ * The required MFA level for a guild
+ * * NONE
+ * * ELEVATED
+ * @typedef {string} MFALevel
+ */
+exports.MFALevels = createEnum(['NONE', 'ELEVATED']);
+
+/**
+ * NSFW level of a Guild:
  * * DEFAULT
  * * EXPLICIT
  * * SAFE
@@ -872,6 +856,24 @@ exports.MessageButtonStyles = createEnum([null, 'PRIMARY', 'SECONDARY', 'SUCCESS
  * @typedef {string} NSFWLevel
  */
 exports.NSFWLevels = createEnum(['DEFAULT', 'EXPLICIT', 'SAFE', 'AGE_RESTRICTED']);
+
+/**
+ * Privacy level of a {@link StageInstance} object:
+ * * PUBLIC
+ * * GUILD_ONLY
+ * @typedef {string} PrivacyLevel
+ */
+exports.PrivacyLevels = createEnum([null, 'PUBLIC', 'GUILD_ONLY']);
+
+/**
+ * The premium tier (Server Boost level) of a guild:
+ * * NONE
+ * * TIER_1
+ * * TIER_2
+ * * TIER_3
+ * @typedef {string} PremiumTier
+ */
+exports.PremiumTiers = createEnum(['NONE', 'TIER_1', 'TIER_2', 'TIER_3']);
 
 function keyMirror(arr) {
   let tmp = Object.create(null);

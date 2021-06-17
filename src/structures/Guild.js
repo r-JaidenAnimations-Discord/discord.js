@@ -6,7 +6,6 @@ const GuildPreview = require('./GuildPreview');
 const GuildTemplate = require('./GuildTemplate');
 const Integration = require('./Integration');
 const Invite = require('./Invite');
-const VoiceRegion = require('./VoiceRegion');
 const Webhook = require('./Webhook');
 const { Error, TypeError } = require('../errors');
 const GuildApplicationCommandManager = require('../managers/GuildApplicationCommandManager');
@@ -16,15 +15,19 @@ const GuildEmojiManager = require('../managers/GuildEmojiManager');
 const GuildMemberManager = require('../managers/GuildMemberManager');
 const PresenceManager = require('../managers/PresenceManager');
 const RoleManager = require('../managers/RoleManager');
+const StageInstanceManager = require('../managers/StageInstanceManager');
 const VoiceStateManager = require('../managers/VoiceStateManager');
 const Collection = require('../util/Collection');
 const {
   ChannelTypes,
-  DefaultMessageNotifications,
+  DefaultMessageNotificationLevels,
   PartialTypes,
   VerificationLevels,
   ExplicitContentFilterLevels,
   NSFWLevels,
+  Status,
+  MFALevels,
+  PremiumTiers,
 } = require('../util/Constants');
 const DataResolver = require('../util/DataResolver');
 const SystemChannelFlags = require('../util/SystemChannelFlags');
@@ -83,6 +86,12 @@ class Guild extends BaseGuild {
     this.voiceStates = new VoiceStateManager(this);
 
     /**
+     * A manager of the stage instances of this guild
+     * @type {StageInstanceManager}
+     */
+    this.stageInstances = new StageInstanceManager(this);
+
+    /**
      * Whether the bot has been removed from the guild
      * @type {boolean}
      */
@@ -139,12 +148,6 @@ class Guild extends BaseGuild {
      * @type {?string}
      */
     this.discoverySplash = data.discovery_splash;
-
-    /**
-     * The region the guild is located in
-     * @type {string}
-     */
-    this.region = data.region;
 
     /**
      * The full amount of members in this guild
@@ -215,19 +218,10 @@ class Guild extends BaseGuild {
     this.systemChannelID = data.system_channel_id;
 
     /**
-     * The type of premium tier:
-     * * 0: NONE
-     * * 1: TIER_1
-     * * 2: TIER_2
-     * * 3: TIER_3
-     * @typedef {number} PremiumTier
-     */
-
-    /**
-     * The premium tier on this guild
+     * The premium tier of this guild
      * @type {PremiumTier}
      */
-    this.premiumTier = data.premium_tier;
+    this.premiumTier = PremiumTiers[data.premium_tier];
 
     if (typeof data.premium_subscription_count !== 'undefined') {
       /**
@@ -266,10 +260,10 @@ class Guild extends BaseGuild {
     this.explicitContentFilter = ExplicitContentFilterLevels[data.explicit_content_filter];
 
     /**
-     * The required MFA level for the guild
-     * @type {number}
+     * The required MFA level for this guild
+     * @type {MFALevel}
      */
-    this.mfaLevel = data.mfa_level;
+    this.mfaLevel = MFALevels[data.mfa_level];
 
     /**
      * The timestamp the client user joined the guild at
@@ -278,11 +272,10 @@ class Guild extends BaseGuild {
     this.joinedTimestamp = data.joined_at ? new Date(data.joined_at).getTime() : this.joinedTimestamp;
 
     /**
-     * The value set for the guild's default message notifications
-     * @type {DefaultMessageNotifications|number}
+     * The default message notification level of the guild
+     * @type {DefaultMessageNotificationLevel}
      */
-    this.defaultMessageNotifications =
-      DefaultMessageNotifications[data.default_message_notifications] || data.default_message_notifications;
+    this.defaultMessageNotifications = DefaultMessageNotificationLevels[data.default_message_notifications];
 
     /**
      * The value set for the guild's system channel flags
@@ -407,6 +400,13 @@ class Guild extends BaseGuild {
       }
     }
 
+    if (data.stage_instances) {
+      this.stageInstances.cache.clear();
+      for (const stageInstance of data.stage_instances) {
+        this.stageInstances.add(stageInstance);
+      }
+    }
+
     if (data.voice_states) {
       this.voiceStates.cache.clear();
       for (const voiceState of data.voice_states) {
@@ -431,7 +431,7 @@ class Guild extends BaseGuild {
 
   /**
    * The URL to this guild's banner.
-   * @param {ImageURLOptions} [options={}] Options for the Image URL
+   * @param {StaticImageURLOptions} [options={}] Options for the Image URL
    * @returns {?string}
    */
   bannerURL({ format, size } = {}) {
@@ -450,7 +450,7 @@ class Guild extends BaseGuild {
 
   /**
    * The URL to this guild's invite splash image.
-   * @param {ImageURLOptions} [options={}] Options for the Image URL
+   * @param {StaticImageURLOptions} [options={}] Options for the Image URL
    * @returns {?string}
    */
   splashURL({ format, size } = {}) {
@@ -460,7 +460,7 @@ class Guild extends BaseGuild {
 
   /**
    * The URL to this guild's discovery splash image.
-   * @param {ImageURLOptions} [options={}] Options for the Image URL
+   * @param {StaticImageURLOptions} [options={}] Options for the Image URL
    * @returns {?string}
    */
   discoverySplashURL({ format, size } = {}) {
@@ -700,21 +700,6 @@ class Guild extends BaseGuild {
   }
 
   /**
-   * Fetches available voice regions.
-   * @returns {Promise<Collection<string, VoiceRegion>>}
-   */
-  fetchVoiceRegions() {
-    return this.client.api
-      .guilds(this.id)
-      .regions.get()
-      .then(res => {
-        const regions = new Collection();
-        for (const region of res) regions.set(region.id, new VoiceRegion(region));
-        return regions;
-      });
-  }
-
-  /**
    * Data for the Guild Widget object
    * @typedef {Object} GuildWidget
    * @property {boolean} enabled Whether the widget is enabled
@@ -748,12 +733,17 @@ class Guild extends BaseGuild {
   }
 
   /**
+   * Options used to fetch audit logs.
+   * @typedef {Object} GuildAuditLogsFetchOptions
+   * @property {Snowflake|GuildAuditLogsEntry} [before] Only return entries before this entry
+   * @property {number} [limit] The number of entries to return
+   * @property {UserResolvable} [user] Only return entries for actions made by this user
+   * @property {AuditLogAction|number} [type] Only return entries for this action type
+   */
+
+  /**
    * Fetches audit logs for this guild.
-   * @param {Object} [options={}] Options for fetching audit logs
-   * @param {Snowflake|GuildAuditLogsEntry} [options.before] Limit to entries from before specified entry
-   * @param {number} [options.limit] Limit number of entries
-   * @param {UserResolvable} [options.user] Only show entries involving this user
-   * @param {AuditLogAction|number} [options.type] Only show entries involving this action type
+   * @param {GuildAuditLogsFetchOptions} [options={}] Options for fetching audit logs
    * @returns {Promise<GuildAuditLogs>}
    * @example
    * // Output audit log entries
@@ -779,16 +769,21 @@ class Guild extends BaseGuild {
   }
 
   /**
-   * Adds a user to the guild using OAuth2. Requires the `CREATE_INSTANT_INVITE` permission.
-   * @param {UserResolvable} user User to add to the guild
-   * @param {Object} options Options for the addition
-   * @param {string} options.accessToken An OAuth2 access token for the user with the `guilds.join` scope granted to the
+   * Options used to add a user to a guild using OAuth2.
+   * @typedef {Object} AddGuildMemberOptions
+   * @property {string} accessToken An OAuth2 access token for the user with the `guilds.join` scope granted to the
    * bot's application
-   * @param {string} [options.nick] Nickname to give the member (requires `MANAGE_NICKNAMES`)
-   * @param {Collection<Snowflake, Role>|RoleResolvable[]} [options.roles] Roles to add to the member
+   * @property {string} [nick] The nickname to give to the member (requires `MANAGE_NICKNAMES`)
+   * @property {Collection<Snowflake, Role>|RoleResolvable[]} [roles] The roles to add to the member
    * (requires `MANAGE_ROLES`)
-   * @param {boolean} [options.mute] Whether the member should be muted (requires `MUTE_MEMBERS`)
-   * @param {boolean} [options.deaf] Whether the member should be deafened (requires `DEAFEN_MEMBERS`)
+   * @property {boolean} [mute] Whether the member should be muted (requires `MUTE_MEMBERS`)
+   * @property {boolean} [deaf] Whether the member should be deafened (requires `DEAFEN_MEMBERS`)
+   */
+
+  /**
+   * Adds a user to the guild using OAuth2. Requires the `CREATE_INSTANT_INVITE` permission.
+   * @param {UserResolvable} user The user to add to the guild
+   * @param {AddGuildMemberOptions} options Options for adding the user to the guild
    * @returns {Promise<GuildMember>}
    */
   async addMember(user, options) {
@@ -817,7 +812,6 @@ class Guild extends BaseGuild {
    * The data for editing a guild.
    * @typedef {Object} GuildEditData
    * @property {string} [name] The name of the guild
-   * @property {string} [region] The region of the guild
    * @property {VerificationLevel|number} [verificationLevel] The verification level of the guild
    * @property {ExplicitContentFilterLevel|number} [explicitContentFilter] The level of the explicit content filter
    * @property {ChannelResolvable} [afkChannel] The AFK channel of the guild
@@ -828,7 +822,8 @@ class Guild extends BaseGuild {
    * @property {Base64Resolvable} [splash] The invite splash image of the guild
    * @property {Base64Resolvable} [discoverySplash] The discovery splash image of the guild
    * @property {Base64Resolvable} [banner] The banner of the guild
-   * @property {DefaultMessageNotifications|number} [defaultMessageNotifications] The default message notifications
+   * @property {DefaultMessageNotificationLevel|number} [defaultMessageNotifications] The default message notification
+   * level of the guild
    * @property {SystemChannelFlagsResolvable} [systemChannelFlags] The system channel flags of the guild
    * @property {ChannelResolvable} [rulesChannel] The rules channel of the guild
    * @property {ChannelResolvable} [publicUpdatesChannel] The community updates channel of the guild
@@ -843,23 +838,21 @@ class Guild extends BaseGuild {
    * @param {string} [reason] Reason for editing this guild
    * @returns {Promise<Guild>}
    * @example
-   * // Set the guild name and region
+   * // Set the guild name
    * guild.edit({
    *   name: 'Discord Guild',
-   *   region: 'london',
    * })
-   *   .then(updated => console.log(`New guild name ${updated} in region ${updated.region}`))
+   *   .then(updated => console.log(`New guild name ${updated}`))
    *   .catch(console.error);
    */
   edit(data, reason) {
     const _data = {};
     if (data.name) _data.name = data.name;
-    if (data.region) _data.region = data.region;
     if (typeof data.verificationLevel !== 'undefined') {
       _data.verification_level =
         typeof data.verificationLevel === 'number'
-          ? Number(data.verificationLevel)
-          : VerificationLevels.indexOf(data.verificationLevel);
+          ? data.verificationLevel
+          : VerificationLevels[data.verificationLevel];
     }
     if (typeof data.afkChannel !== 'undefined') {
       _data.afk_channel_id = this.client.channels.resolveID(data.afkChannel);
@@ -877,13 +870,13 @@ class Guild extends BaseGuild {
       _data.explicit_content_filter =
         typeof data.explicitContentFilter === 'number'
           ? data.explicitContentFilter
-          : ExplicitContentFilterLevels.indexOf(data.explicitContentFilter);
+          : ExplicitContentFilterLevels[data.explicitContentFilter];
     }
     if (typeof data.defaultMessageNotifications !== 'undefined') {
       _data.default_message_notifications =
-        typeof data.defaultMessageNotifications === 'string'
-          ? DefaultMessageNotifications.indexOf(data.defaultMessageNotifications)
-          : data.defaultMessageNotifications;
+        typeof data.defaultMessageNotifications === 'number'
+          ? data.defaultMessageNotifications
+          : DefaultMessageNotificationLevels[data.defaultMessageNotifications];
     }
     if (typeof data.systemChannelFlags !== 'undefined') {
       _data.system_channel_flags = SystemChannelFlags.resolve(data.systemChannelFlags);
@@ -920,7 +913,7 @@ class Guild extends BaseGuild {
   /* eslint-disable max-len */
   /**
    * Edits the setting of the default message notifications of the guild.
-   * @param {DefaultMessageNotifications|number} defaultMessageNotifications The new setting for the default message notifications
+   * @param {DefaultMessageNotificationLevel|number} defaultMessageNotifications The new default message notification level of the guild
    * @param {string} [reason] Reason for changing the setting of the default message notifications
    * @returns {Promise<Guild>}
    */
@@ -952,21 +945,6 @@ class Guild extends BaseGuild {
    */
   setName(name, reason) {
     return this.edit({ name }, reason);
-  }
-
-  /**
-   * Edits the region of the guild.
-   * @param {string} region The new region of the guild
-   * @param {string} [reason] Reason for changing the guild's region
-   * @returns {Promise<Guild>}
-   * @example
-   * // Edit the guild region
-   * guild.setRegion('london')
-   *  .then(updated => console.log(`Updated guild region to ${updated.region}`))
-   *  .catch(console.error);
-   */
-  setRegion(region, reason) {
-    return this.edit({ region }, reason);
   }
 
   /**
@@ -1179,7 +1157,7 @@ class Guild extends BaseGuild {
       id: this.client.channels.resolveID(r.channel),
       position: r.position,
       lock_permissions: r.lockPermissions,
-      parent_id: this.channels.resolveID(r.parent),
+      parent_id: typeof r.parent !== 'undefined' ? this.channels.resolveID(r.parent) : undefined,
     }));
 
     return this.client.api
@@ -1300,7 +1278,6 @@ class Guild extends BaseGuild {
       this.available === guild.available &&
       this.splash === guild.splash &&
       this.discoverySplash === guild.discoverySplash &&
-      this.region === guild.region &&
       this.name === guild.name &&
       this.memberCount === guild.memberCount &&
       this.large === guild.large &&
@@ -1326,6 +1303,35 @@ class Guild extends BaseGuild {
     json.discoverySplashURL = this.discoverySplashURL();
     json.bannerURL = this.bannerURL();
     return json;
+  }
+
+  /**
+   * The voice state adapter for this guild that can be used with @discordjs/voice to play audio in voice
+   * and stage channels.
+   * @type {Function}
+   * @readonly
+   * @example
+   * const { joinVoiceChannel } = require('@discordjs/voice');
+   * const voiceConnection = joinVoiceChannel({
+   *  channelId: channel.id,
+   *  guildId: channel.guild.id,
+   *  adapterCreator: channel.guild.voiceAdapterCreator,
+   * });
+   */
+  get voiceAdapterCreator() {
+    return methods => {
+      this.client.voice.adapters.set(this.id, methods);
+      return {
+        sendPayload: data => {
+          if (this.shard.status !== Status.READY) return false;
+          this.shard.send(data);
+          return true;
+        },
+        destroy: () => {
+          this.client.voice.adapters.delete(this.id);
+        },
+      };
+    };
   }
 
   /**

@@ -169,7 +169,7 @@ class Activity {
      * The type of the activity status
      * @type {ActivityType}
      */
-    this.type = ActivityTypes[data.type] || ActivityTypes[ActivityTypes.indexOf(data.type)];
+    this.type = typeof data.type === 'number' ? ActivityTypes[data.type] : data.type;
 
     /**
      * If the activity is being streamed, a link to the stream
@@ -335,9 +335,7 @@ class RichPresenceAssets {
 
   /**
    * Gets the URL of the small image asset
-   * @param {Object} [options] Options for the image url
-   * @param {string} [options.format] Format of the image
-   * @param {number} [options.size] Size of the image
+   * @param {StaticImageURLOptions} [options] Options for the image url
    * @returns {?string} The small image URL
    */
   smallImageURL({ format, size } = {}) {
@@ -350,9 +348,7 @@ class RichPresenceAssets {
 
   /**
    * Gets the URL of the large image asset
-   * @param {Object} [options] Options for the image url
-   * @param {string} [options.format] Format of the image
-   * @param {number} [options.size] Size of the image
+   * @param {StaticImageURLOptions} [options] Options for the image url
    * @returns {?string} The large image URL
    */
   largeImageURL({ format, size } = {}) {

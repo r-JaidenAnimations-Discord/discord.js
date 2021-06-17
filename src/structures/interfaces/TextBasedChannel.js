@@ -70,7 +70,7 @@ class TextBasedChannel {
   /**
    * Options provided when sending or editing a message.
    * @typedef {BaseMessageOptions} MessageOptions
-   * @property {MessageEmbed|Object} [embed] An embed for the message
+   * @property {MessageEmbed[]|Object[]} [embeds] The embeds for the message
    * (see [here](https://discord.com/developers/docs/resources/channel#embed-object) for more details)
    * @property {ReplyOptions} [reply] The options for replying to a message
    */
@@ -102,7 +102,8 @@ class TextBasedChannel {
    * Options for splitting a message.
    * @typedef {Object} SplitOptions
    * @property {number} [maxLength=2000] Maximum character length per message piece
-   * @property {string} [char='\n'] Character to split the message with
+   * @property {string|string[]|RegExp|RegExp[]} [char='\n'] Character(s) or Regex(s) to split the message with,
+   * an array can be used to split multiple times
    * @property {string} [prepend=''] Text to prepend to every piece except the first
    * @property {string} [append=''] Text to append to every piece except the last
    */
@@ -143,16 +144,19 @@ class TextBasedChannel {
    *   .catch(console.error);
    * @example
    * // Send an embed with a local image inside
-   * channel.send('This is an embed', {
-   *   embed: {
-   *     thumbnail: {
-   *          url: 'attachment://file.jpg'
+   * channel.send({
+   *   content: 'This is an embed',
+   *   embeds: [
+   *     {
+   *       thumbnail: {
+   *         url: 'attachment://file.jpg'
    *       }
-   *    },
-   *    files: [{
-   *       attachment: 'entire/path/to/file.jpg',
-   *       name: 'file.jpg'
-   *    }]
+   *     }
+   *   ],
+   *   files: [{
+   *     attachment: 'entire/path/to/file.jpg',
+   *     name: 'file.jpg'
+   *   }]
    * })
    *   .then(console.log)
    *   .catch(console.error);
@@ -171,9 +175,10 @@ class TextBasedChannel {
       apiMessage = options.resolveData();
     } else {
       apiMessage = APIMessage.create(this, options).resolveData();
-      if (Array.isArray(apiMessage.data.content)) {
-        return Promise.all(apiMessage.split().map(this.send.bind(this)));
-      }
+    }
+
+    if (Array.isArray(apiMessage.data.content)) {
+      return Promise.all(apiMessage.split().map(this.send.bind(this)));
     }
 
     const { data, files } = await apiMessage.resolveFiles();
@@ -337,22 +342,22 @@ class TextBasedChannel {
    * Collects a single component interaction that passes the filter.
    * The Promise will reject if the time expires.
    * @param {CollectorFilter} filter The filter function to use
-   * @param {number} [time] Time to wait for an interaction before rejecting
+   * @param {AwaitMessageComponentInteractionOptions} [options={}] Options to pass to the internal collector
    * @returns {Promise<MessageComponentInteraction>}
    * @example
-   * // Collect a button interaction
+   * // Collect a message component interaction
    * const filter = (interaction) => interaction.customID === 'button' && interaction.user.id === 'someID';
-   * channel.awaitMessageComponentInteraction(filter, 15000)
+   * channel.awaitMessageComponentInteraction(filter, { time: 15000 })
    *   .then(interaction => console.log(`${interaction.customID} was clicked!`))
    *   .catch(console.error);
    */
-  awaitMessageComponentInteraction(filter, time) {
+  awaitMessageComponentInteraction(filter, { time } = {}) {
     return new Promise((resolve, reject) => {
       const collector = this.createMessageComponentInteractionCollector(filter, { max: 1, time });
-      collector.once('end', interactions => {
+      collector.once('end', (interactions, reason) => {
         const interaction = interactions.first();
-        if (!interaction) reject(new Error('INTERACTION_COLLECTOR_TIMEOUT'));
-        else resolve(interaction);
+        if (interaction) resolve(interaction);
+        else reject(new Error('INTERACTION_COLLECTOR_ERROR', reason));
       });
     });
   }

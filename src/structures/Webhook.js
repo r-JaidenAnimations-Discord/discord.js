@@ -2,6 +2,7 @@
 
 const APIMessage = require('./APIMessage');
 const Channel = require('./Channel');
+const { Error } = require('../errors');
 const { WebhookTypes } = require('../util/Constants');
 const DataResolver = require('../util/DataResolver');
 const SnowflakeUtil = require('../util/SnowflakeUtil');
@@ -29,7 +30,7 @@ class Webhook {
     this.name = data.name;
 
     /**
-     * The token for the webhook
+     * The token for the webhook, unavailable for follower webhooks and webhooks owned by another application.
      * @name Webhook#token
      * @type {?string}
      */
@@ -49,7 +50,7 @@ class Webhook {
 
     /**
      * The type of the webhook
-     * @type {WebhookTypes}
+     * @type {WebhookType}
      */
     this.type = WebhookTypes[data.type];
 
@@ -149,15 +150,18 @@ class Webhook {
    *   .catch(console.error);
    */
   async send(options) {
+    if (!this.token) throw new Error('WEBHOOK_TOKEN_UNAVAILABLE');
+
     let apiMessage;
 
     if (options instanceof APIMessage) {
       apiMessage = options.resolveData();
     } else {
       apiMessage = APIMessage.create(this, options).resolveData();
-      if (Array.isArray(apiMessage.data.content)) {
-        return Promise.all(apiMessage.split().map(this.send.bind(this)));
-      }
+    }
+
+    if (Array.isArray(apiMessage.data.content)) {
+      return Promise.all(apiMessage.split().map(this.send.bind(this)));
     }
 
     const { data, files } = await apiMessage.resolveFiles();
@@ -194,6 +198,8 @@ class Webhook {
    * }).catch(console.error);
    */
   sendSlackMessage(body) {
+    if (!this.token) throw new Error('WEBHOOK_TOKEN_UNAVAILABLE');
+
     return this.client.api
       .webhooks(this.id, this.token)
       .slack.post({
@@ -205,12 +211,17 @@ class Webhook {
   }
 
   /**
-   * Edits the webhook.
-   * @param {Object} options Options
-   * @param {string} [options.name=this.name] New name for this webhook
-   * @param {BufferResolvable} [options.avatar] New avatar for this webhook
-   * @param {ChannelResolvable} [options.channel] New channel for this webhook
-   * @param {string} [reason] Reason for editing this webhook
+   * Options used to edit a {@link Webhook}.
+   * @typedef {Object} WebhookEditData
+   * @property {string} [name=this.name] The new name for the webhook
+   * @property {BufferResolvable} [avatar] The new avatar for the webhook
+   * @property {ChannelResolvable} [channel] The new channel for the webhook
+   */
+
+  /**
+   * Edits this webhook.
+   * @param {WebhookEditData} options Options for editing the webhook
+   * @param {string} [reason] Reason for editing the webhook
    * @returns {Promise<Webhook>}
    */
   async edit({ name = this.name, avatar, channel }, reason) {
@@ -237,6 +248,8 @@ class Webhook {
    * {@link WebhookClient} or if the channel is uncached, otherwise a {@link Message} will be returned
    */
   async fetchMessage(message, cache = true) {
+    if (!this.token) throw new Error('WEBHOOK_TOKEN_UNAVAILABLE');
+
     const data = await this.client.api.webhooks(this.id, this.token).messages(message).get();
     return this.client.channels?.cache.get(data.channel_id)?.messages.add(data, cache) ?? data;
   }
@@ -249,6 +262,8 @@ class Webhook {
    * {@link WebhookClient} or if the channel is uncached, otherwise a {@link Message} will be returned
    */
   async editMessage(message, options) {
+    if (!this.token) throw new Error('WEBHOOK_TOKEN_UNAVAILABLE');
+
     let apiMessage;
 
     if (options instanceof APIMessage) apiMessage = options;
@@ -287,6 +302,8 @@ class Webhook {
    * @returns {Promise<void>}
    */
   async deleteMessage(message) {
+    if (!this.token) throw new Error('WEBHOOK_TOKEN_UNAVAILABLE');
+
     await this.client.api
       .webhooks(this.id, this.token)
       .messages(typeof message === 'string' ? message : message.id)
@@ -322,7 +339,7 @@ class Webhook {
 
   /**
    * A link to the webhook's avatar.
-   * @param {ImageURLOptions} [options={}] Options for the Image URL
+   * @param {StaticImageURLOptions} [options={}] Options for the Image URL
    * @returns {?string}
    */
   avatarURL({ format, size } = {}) {
