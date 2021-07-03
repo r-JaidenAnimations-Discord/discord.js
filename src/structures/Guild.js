@@ -1,12 +1,13 @@
 'use strict';
 
-const BaseGuild = require('./BaseGuild');
+const AnonymousGuild = require('./AnonymousGuild');
 const GuildAuditLogs = require('./GuildAuditLogs');
 const GuildPreview = require('./GuildPreview');
 const GuildTemplate = require('./GuildTemplate');
 const Integration = require('./Integration');
 const Invite = require('./Invite');
 const Webhook = require('./Webhook');
+const WelcomeScreen = require('./WelcomeScreen');
 const { Error, TypeError } = require('../errors');
 const GuildApplicationCommandManager = require('../managers/GuildApplicationCommandManager');
 const GuildBanManager = require('../managers/GuildBanManager');
@@ -24,7 +25,6 @@ const {
   PartialTypes,
   VerificationLevels,
   ExplicitContentFilterLevels,
-  NSFWLevels,
   Status,
   MFALevels,
   PremiumTiers,
@@ -37,11 +37,11 @@ const Util = require('../util/Util');
  * Represents a guild (or a server) on Discord.
  * <info>It's recommended to see if a guild is available before performing operations or reading data from it. You can
  * check this with `guild.available`.</info>
- * @extends {BaseGuild}
+ * @extends {AnonymousGuild}
  */
-class Guild extends BaseGuild {
+class Guild extends AnonymousGuild {
   constructor(client, data) {
-    super(client, data);
+    super(client, data, false);
 
     /**
      * A manager of the application commands belonging to this guild
@@ -131,17 +131,11 @@ class Guild extends BaseGuild {
    * @private
    */
   _patch(data) {
+    super._patch(data);
     this.id = data.id;
     this.name = data.name;
     this.icon = data.icon;
-    this.features = data.features;
     this.available = !data.unavailable;
-
-    /**
-     * The hash of the guild invite splash image
-     * @type {?string}
-     */
-    this.splash = data.splash;
 
     /**
      * The hash of the guild discovery splash image
@@ -153,21 +147,13 @@ class Guild extends BaseGuild {
      * The full amount of members in this guild
      * @type {number}
      */
-    this.memberCount = data.member_count || this.memberCount;
-
-    if ('nsfw_level' in data) {
-      /**
-       * The NSFW level of this guild
-       * @type {NSFWLevel}
-       */
-      this.nsfwLevel = NSFWLevels[data.nsfw_level];
-    }
+    this.memberCount = data.member_count ?? this.memberCount;
 
     /**
      * Whether the guild is "large" (has more than large_threshold members, 50 by default)
      * @type {boolean}
      */
-    this.large = Boolean('large' in data ? data.large : this.large);
+    this.large = Boolean(data.large ?? this.large);
 
     /**
      * An array of enabled guild features, here are the possible values:
@@ -184,7 +170,10 @@ class Guild extends BaseGuild {
      * * NEWS
      * * PARTNERED
      * * PREVIEW_ENABLED
+     * * PRIVATE_THREADS
      * * RELAY_ENABLED
+     * * SEVEN_DAY_THREAD_ARCHIVE
+     * * THREE_DAY_THREAD_ARCHIVE
      * * TICKETED_EVENTS_ENABLED
      * * VANITY_URL
      * * VERIFIED
@@ -248,12 +237,6 @@ class Guild extends BaseGuild {
     }
 
     /**
-     * The verification level of the guild
-     * @type {VerificationLevel}
-     */
-    this.verificationLevel = VerificationLevels[data.verification_level];
-
-    /**
      * The explicit content filter level of the guild
      * @type {ExplicitContentFilterLevel}
      */
@@ -299,7 +282,7 @@ class Guild extends BaseGuild {
        * <info>You will need to fetch the guild using {@link Guild#fetch} if you want to receive this parameter</info>
        * @type {?number}
        */
-      this.maximumPresences = data.max_presences || 25000;
+      this.maximumPresences = data.max_presences ?? 25000;
     } else if (typeof this.maximumPresences === 'undefined') {
       this.maximumPresences = null;
     }
@@ -327,29 +310,11 @@ class Guild extends BaseGuild {
     }
 
     /**
-     * The vanity invite code of the guild, if any
-     * @type {?string}
-     */
-    this.vanityURLCode = data.vanity_url_code;
-
-    /**
      * The use count of the vanity URL code of the guild, if any
      * <info>You will need to fetch this parameter using {@link Guild#fetchVanityData} if you want to receive it</info>
      * @type {?number}
      */
     this.vanityURLUses = null;
-
-    /**
-     * The description of the guild, if any
-     * @type {?string}
-     */
-    this.description = data.description;
-
-    /**
-     * The hash of the guild banner
-     * @type {?string}
-     */
-    this.banner = data.banner;
 
     /**
      * The ID of the rules channel for the guild
@@ -373,6 +338,12 @@ class Guild extends BaseGuild {
       this.channels.cache.clear();
       for (const rawChannel of data.channels) {
         this.client.channels.add(rawChannel, this);
+      }
+    }
+
+    if (data.threads) {
+      for (const rawThread of data.threads) {
+        this.client.channels.add(rawThread, this);
       }
     }
 
@@ -435,8 +406,7 @@ class Guild extends BaseGuild {
    * @returns {?string}
    */
   bannerURL({ format, size } = {}) {
-    if (!this.banner) return null;
-    return this.client.rest.cdn.Banner(this.id, this.banner, format, size);
+    return this.banner && this.client.rest.cdn.Banner(this.id, this.banner, format, size);
   }
 
   /**
@@ -454,8 +424,7 @@ class Guild extends BaseGuild {
    * @returns {?string}
    */
   splashURL({ format, size } = {}) {
-    if (!this.splash) return null;
-    return this.client.rest.cdn.Splash(this.id, this.splash, format, size);
+    return this.splash && this.client.rest.cdn.Splash(this.id, this.splash, format, size);
   }
 
   /**
@@ -464,8 +433,7 @@ class Guild extends BaseGuild {
    * @returns {?string}
    */
   discoverySplashURL({ format, size } = {}) {
-    if (!this.discoverySplash) return null;
-    return this.client.rest.cdn.DiscoverySplash(this.id, this.discoverySplash, format, size);
+    return this.discoverySplash && this.client.rest.cdn.DiscoverySplash(this.id, this.discoverySplash, format, size);
   }
 
   /**
@@ -491,7 +459,7 @@ class Guild extends BaseGuild {
    * @readonly
    */
   get afkChannel() {
-    return this.client.channels.cache.get(this.afkChannelID) || null;
+    return this.client.channels.resolve(this.afkChannelID);
   }
 
   /**
@@ -500,7 +468,7 @@ class Guild extends BaseGuild {
    * @readonly
    */
   get systemChannel() {
-    return this.client.channels.cache.get(this.systemChannelID) || null;
+    return this.client.channels.resolve(this.systemChannelID);
   }
 
   /**
@@ -509,7 +477,7 @@ class Guild extends BaseGuild {
    * @readonly
    */
   get widgetChannel() {
-    return this.client.channels.cache.get(this.widgetChannelID) || null;
+    return this.client.channels.resolve(this.widgetChannelID);
   }
 
   /**
@@ -518,7 +486,7 @@ class Guild extends BaseGuild {
    * @readonly
    */
   get rulesChannel() {
-    return this.client.channels.cache.get(this.rulesChannelID) || null;
+    return this.client.channels.resolve(this.rulesChannelID);
   }
 
   /**
@@ -527,7 +495,7 @@ class Guild extends BaseGuild {
    * @readonly
    */
   get publicUpdatesChannel() {
-    return this.client.channels.cache.get(this.publicUpdatesChannelID) || null;
+    return this.client.channels.resolve(this.publicUpdatesChannelID);
   }
 
   /**
@@ -537,7 +505,7 @@ class Guild extends BaseGuild {
    */
   get me() {
     return (
-      this.members.cache.get(this.client.user.id) ||
+      this.members.resolve(this.client.user.id) ??
       (this.client.options.partials.includes(PartialTypes.GUILD_MEMBER)
         ? this.members.add({ user: { id: this.client.user.id } }, true)
         : null)
@@ -574,6 +542,15 @@ class Guild extends BaseGuild {
       .then(templates =>
         templates.reduce((col, data) => col.set(data.code, new GuildTemplate(this.client, data)), new Collection()),
       );
+  }
+
+  /**
+   * Fetches the welcome screen for this guild.
+   * @returns {Promise<WelcomeScreen>}
+   */
+  async fetchWelcomeScreen() {
+    const data = await this.client.api.guilds(this.id, 'welcome-screen').get();
+    return new WelcomeScreen(this, data);
   }
 
   /**
@@ -898,6 +875,60 @@ class Guild extends BaseGuild {
       .guilds(this.id)
       .patch({ data: _data, reason })
       .then(newData => this.client.actions.GuildUpdate.handle(newData).updated);
+  }
+
+  /**
+   * Welcome channel data
+   * @typedef {Object} WelcomeChannelData
+   * @property {string} description The description to show for this welcome channel
+   * @property {GuildTextChannelResolvable} channel The channel to link for this welcome channel
+   * @property {EmojiIdentifierResolvable} [emoji] The emoji to display for this welcome channel
+   */
+
+  /**
+   * Welcome screen edit data
+   * @typedef {Object} WelcomeScreenEditData
+   * @property {boolean} [enabled] Whether the welcome screen is enabled
+   * @property {string} [description] The description for the welcome screen
+   * @property {WelcomeChannelData[]} [welcomeChannels] The welcome channel data for the welcome screen
+   */
+
+  /**
+   * Updates the guild's welcome screen
+   * @param {WelcomeScreenEditData} data Data to edit the welcome screen with
+   * @returns {Promise<WelcomeScreen>}
+   * @example
+   * guild.editWelcomeScreen({
+   *   description: 'Hello World',
+   *   enabled: true,
+   *   welcomeChannels: [
+   *     {
+   *       description: 'foobar',
+   *       channel: '222197033908436994',
+   *     }
+   *   ],
+   * })
+   */
+  async editWelcomeScreen(data) {
+    const { enabled, description, welcomeChannels } = data;
+    const welcome_channels = welcomeChannels?.map(welcomeChannelData => {
+      const emoji = this.emojis.resolve(welcomeChannelData.emoji);
+      return {
+        emoji_id: emoji && emoji.id,
+        emoji_name: emoji?.name ?? welcomeChannelData.emoji,
+        channel_id: this.channels.resolveID(welcomeChannelData.channel),
+        description: welcomeChannelData.description,
+      };
+    });
+
+    const patchData = await this.client.api.guilds(this.id, 'welcome-screen').patch({
+      data: {
+        welcome_channels,
+        description,
+        enabled,
+      },
+    });
+    return new WelcomeScreen(this, patchData);
   }
 
   /**
@@ -1364,3 +1395,8 @@ class Guild extends BaseGuild {
 }
 
 module.exports = Guild;
+
+/**
+ * @external APIGuild
+ * @see {@link https://discord.com/developers/docs/resources/guild#guild-object}
+ */
