@@ -1,13 +1,13 @@
 'use strict';
 
+const { Collection } = require('@discordjs/collection');
 const Collector = require('./interfaces/Collector');
-const Collection = require('../util/Collection');
 const { Events } = require('../util/Constants');
 const { InteractionTypes, MessageComponentTypes } = require('../util/Constants');
 
 /**
  * @typedef {CollectorOptions} InteractionCollectorOptions
- * @property {TextChannel|DMChannel|NewsChannel} [channel] The channel to listen to interactions from
+ * @property {TextBasedChannels} [channel] The channel to listen to interactions from
  * @property {MessageComponentType} [componentType] The type of component to listen for
  * @property {Guild} [guild] The guild to listen to interactions from
  * @property {InteractionType} [interactionType] The type of interaction to listen for
@@ -25,7 +25,7 @@ const { InteractionTypes, MessageComponentTypes } = require('../util/Constants')
  */
 class InteractionCollector extends Collector {
   /**
-   * @param {Client} client The client on which to collect message component interactions
+   * @param {Client} client The client on which to collect interactions
    * @param {InteractionCollectorOptions} [options={}] The options to apply to this collector
    */
   constructor(client, options = {}) {
@@ -39,7 +39,7 @@ class InteractionCollector extends Collector {
 
     /**
      * The channel from which to collect interactions, if provided
-     * @type {?TextChannel|DMChannel|NewsChannel}
+     * @type {?TextBasedChannels}
      */
     this.channel = this.message?.channel ?? options.channel ?? null;
 
@@ -68,7 +68,7 @@ class InteractionCollector extends Collector {
         : options.componentType ?? null;
 
     /**
-     * The users which have interacted to components on this collector
+     * The users which have interacted to this collector
      * @type {Collection}
      */
     this.users = new Collection();
@@ -122,14 +122,14 @@ class InteractionCollector extends Collector {
   collect(interaction) {
     /**
      * Emitted whenever a interaction is collected.
-     * @event MessageComponentInteractionCollector#collect
+     * @event InteractionCollector#collect
      * @param {Interaction} interaction The interaction that was collected
      */
     if (this.interactionType && interaction.type !== this.interactionType) return null;
     if (this.componentType && interaction.componentType !== this.componentType) return null;
     if (this.message && interaction.message?.id !== this.message.id) return null;
-    if (this.channel && interaction.channelID !== this.channel.id) return null;
-    if (this.guild && interaction.guildID !== this.guild.id) return null;
+    if (this.channel && interaction.channelId !== this.channel.id) return null;
+    if (this.guild && interaction.guildId !== this.guild.id) return null;
 
     return interaction.id;
   }
@@ -142,20 +142,20 @@ class InteractionCollector extends Collector {
   dispose(interaction) {
     /**
      * Emitted whenever an interaction is disposed of.
-     * @event MessageComponentInteractionCollector#dispose
+     * @event InteractionCollector#dispose
      * @param {Interaction} interaction The interaction that was disposed of
      */
     if (this.type && interaction.type !== this.type) return null;
     if (this.componentType && interaction.componentType !== this.componentType) return null;
     if (this.message && interaction.message?.id !== this.message.id) return null;
-    if (this.channel && interaction.channelID !== this.channel.id) return null;
-    if (this.guild && interaction.guildID !== this.guild.id) return null;
+    if (this.channel && interaction.channelId !== this.channel.id) return null;
+    if (this.guild && interaction.guildId !== this.guild.id) return null;
 
     return interaction.id;
   }
 
   /**
-   * Empties this message component collector.
+   * Empties this interaction collector.
    */
   empty() {
     this.total = 0;
